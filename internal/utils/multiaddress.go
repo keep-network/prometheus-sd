@@ -3,14 +3,15 @@ package utils
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 )
 
-func ExtractAddressFromMultiAddress(multiAddress string) (string, error) {
-	pattern := regexp.MustCompile(`^\/(?P<code>.+)\/(?P<address>.+)\/(?P<protocol>.+)\/(?P<port>\d+?)`)
+func ExtractAddressFromMultiAddress(multiAddress string) (string, int, error) {
+	pattern := regexp.MustCompile(`^\/(?P<code>.+)\/(?P<address>.+)\/(?P<protocol>.+)\/(?P<port>\d+)`)
 
 	m := pattern.FindStringSubmatch(multiAddress)
 	if len(m) == 0 {
-		return "", fmt.Errorf("failed to find string submatch")
+		return "", 0, fmt.Errorf("failed to find string submatch")
 	}
 	result := make(map[string]string)
 	for i, name := range pattern.SubexpNames() {
@@ -21,8 +22,13 @@ func ExtractAddressFromMultiAddress(multiAddress string) (string, error) {
 
 	peerAddress := result["address"]
 	if peerAddress == "" {
-		return "", fmt.Errorf("extracted peer address is empty")
+		return "", 0, fmt.Errorf("extracted peer address is empty")
 	}
 
-	return peerAddress, nil
+	peerNetworkPort, err := strconv.Atoi(result["port"])
+	if err != nil || peerNetworkPort == 0 {
+		return "", 0, fmt.Errorf("failed to extract network port: %v", err)
+	}
+
+	return peerAddress, peerNetworkPort, nil
 }

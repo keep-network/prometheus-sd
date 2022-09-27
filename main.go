@@ -166,6 +166,7 @@ func (d *discovery) combineDiscoveredPeers(
 ) map[string]*peerData {
 	var peersNetworkIDs = make(map[string]string, 0)                // chain address -> network id
 	var peersAddressesSet = make(map[string]map[string]struct{}, 0) // chain address -> []network addresses set
+	var peersNetworkPorts = make(map[string]int, 0)                 // chain address -> network port
 	var peers = make(map[string]*peerData, 0)
 
 	for _, diagnostics := range allDiagnostics {
@@ -188,7 +189,7 @@ func (d *discovery) combineDiscoveredPeers(
 			// In case diagnostics sources know different addresses for the peer
 			// we want to combine them in a set.
 			for _, peerMultiAddress := range peer.NetworkMultiAddresses {
-				peerAddress, err := utils.ExtractAddressFromMultiAddress(peerMultiAddress)
+				peerAddress, peerNetworkPort, err := utils.ExtractAddressFromMultiAddress(peerMultiAddress)
 				if err != nil {
 					level.Error(logger).Log(
 						"msg", "failed to extract peer address from multi address",
@@ -203,6 +204,13 @@ func (d *discovery) combineDiscoveredPeers(
 				}
 
 				peersAddressesSet[peer.ChainAddress][peerAddress] = struct{}{}
+
+				if peerNetworkPort > 0 {
+					// A peer can operate on only one network port, so we're not
+					// collecting all the ports extracted from the multi addresses
+					// but just one, as all the extracted ports should match.
+					peersNetworkPorts[peer.ChainAddress] = peerNetworkPort
+				}
 			}
 		}
 	}
@@ -222,6 +230,7 @@ func (d *discovery) combineDiscoveredPeers(
 			ChainAddress:     chainAddress,
 			NetworkID:        peersNetworkIDs[chainAddress],
 			NetworkAddresses: networkAddressesSet,
+			NetworkPort:      peersNetworkPorts[chainAddress],
 		}
 	}
 
