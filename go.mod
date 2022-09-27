@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/go-kit/log v0.2.1
-	github.com/keep-network/keep-core v1.3.1
+	github.com/keep-network/keep-core v1.3.2-0.20220927182131-4b388f159abd
 	github.com/prometheus/common v0.37.0
 	github.com/prometheus/prometheus v0.38.0
 	golang.org/x/exp v0.0.0-20220921164117-439092de6870
@@ -22,7 +22,7 @@ require (
 	github.com/ipfs/go-log v1.0.5 // indirect
 	github.com/ipfs/go-log/v2 v2.5.1 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
-	github.com/keep-network/keep-common v1.7.1-0.20220916085024-7a8696e19eaf // indirect
+	github.com/keep-network/keep-common v1.7.1-0.20220927141039-5689702dc79f // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
