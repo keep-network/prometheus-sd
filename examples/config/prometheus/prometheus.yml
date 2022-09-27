@@ -1,0 +1,24 @@
+scrape_configs:
+  - job_name: keep-network-nodes
+    file_sd_configs:
+      - files:
+          - "data/keep-sd.json"
+    relabel_configs:
+      - source_labels: [__meta_chain_address]
+        action: replace
+        target_label: chain_address
+      - source_labels: [__meta_network_id]
+        action: replace
+        target_label: network_id
+  # Enable config below to discover a peer running on a local machine.
+  # - job_name: keep-local-node
+  #   static_configs:
+  #     - targets:
+  #         - host.docker.internal:9601
+  #   relabel_configs:
+  #     - source_labels: [__meta_chain_address]
+  #       action: replace
+  #       target_label: chain_address
+  #     - source_labels: [__meta_network_id]
+  #       action: replace
+  #       target_label: network_id
