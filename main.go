@@ -67,6 +67,8 @@ type sdConfig struct {
 	scanPortTimeout      time.Duration
 
 	getDiagnosticsTimeout time.Duration
+
+	logJson bool
 }
 
 type peerData struct {
@@ -110,6 +112,11 @@ func init() {
 		"diagnostics.timeout",
 		"Timeout for diagnostics endpoint call.",
 	).Default("5s").DurationVar(&config.getDiagnosticsTimeout)
+
+	app.Flag(
+		"log.json",
+		"Output logs in JSON format.",
+	).Default("false").BoolVar(&config.logJson)
 }
 
 func newDiscovery() (*discovery, error) {
@@ -471,8 +478,16 @@ func main() {
 		fmt.Println("err: ", err)
 		return
 	}
-	logger = log.NewSyncLogger(log.NewLogfmtLogger(os.Stdout))
-	logger = log.With(logger, "ts", log.DefaultTimestampUTC, "caller", log.DefaultCaller)
+
+	var baseLogger log.Logger
+	if config.logJson {
+		baseLogger = log.NewJSONLogger(os.Stdout)
+	} else {
+		baseLogger = log.NewLogfmtLogger(os.Stdout)
+	}
+
+	logger = log.NewSyncLogger(baseLogger)
+	logger = log.With(logger, "ts", log.DefaultTimestampUTC)
 
 	ctx := context.Background()
 
