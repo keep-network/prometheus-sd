@@ -348,11 +348,21 @@ discoveryLoop:
 				}
 
 				// Check if the network address is reachable.
-				isReachable := true // TODO: Implement check if the address is reachable.
+				isReachable := utils.IsPortOpen("tcp", networkAddress, peer.NetworkPort, config.scanPortTimeout)
 				if !isReachable {
+					level.Warn(peerLogger).Log(
+						"msg", "network address is not reachable",
+						"address", networkAddress,
+						"networkPort", peer.NetworkPort,
+					)
 					// The address is not reachable, continue to the next discovered
 					// peer's network address.
 					continue addressLoop
+				} else {
+					level.Info(peerLogger).Log(
+						"msg", "address is reachable under network port",
+						"address", networkAddress,
+						"networkPort", peer.NetworkPort)
 				}
 
 				checkPort := func(port int) error {
