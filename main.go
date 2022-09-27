@@ -521,3 +521,4 @@ func main() {
 
 // TODO: Test what happens if bootstraps are down
 // TODO: Test what happens when one of the nodes is down
+// TODO: Test what happens when a peer is relocated to another port or host address
