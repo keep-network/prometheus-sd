@@ -72,13 +72,18 @@ type sdConfig struct {
 }
 
 type peerData struct {
-	clientinfo.Peer
+	// Resolved from diagnostics.
+	ChainAddress string
+
+	NetworkID        string
+	NetworkAddresses []string
+	NetworkPort      int
+
+	// Resolved by the port scanning.
 	ClientInfoEndpoint string
 }
 
 type discovery struct {
-	peers map[string]*peerData
-
 	oldSourceList map[string]bool
 }
 
@@ -127,7 +132,6 @@ func newDiscovery() (*discovery, error) {
 	}
 
 	cd := &discovery{
-		peers:         make(map[string]*peerData),
 		oldSourceList: make(map[string]bool),
 	}
 	return cd, nil
@@ -159,10 +163,10 @@ func (d *discovery) collectDiagnostics(addresses []string) []clientinfo.Diagnost
 
 func (d *discovery) combineDiscoveredPeers(
 	allDiagnostics []clientinfo.Diagnostics,
-) []clientinfo.Peer {
+) map[string]*peerData {
 	var peersNetworkIDs = make(map[string]string, 0)                // chain address -> network id
 	var peersAddressesSet = make(map[string]map[string]struct{}, 0) // chain address -> []network addresses set
-	var peersSet = make([]clientinfo.Peer, 0)
+	var peers = make(map[string]*peerData, 0)
 
 	for _, diagnostics := range allDiagnostics {
 		for _, peer := range diagnostics.ConnectedPeers {
@@ -214,14 +218,14 @@ func (d *discovery) combineDiscoveredPeers(
 		// TODO: Sort addresses to start endpoint resolving with `dns` addresses
 		// and move addresses looking like internal to the end of the list.
 
-		peersSet = append(peersSet, clientinfo.Peer{
-			ChainAddress:          chainAddress,
-			NetworkID:             peersNetworkIDs[chainAddress],
-			NetworkMultiAddresses: networkAddressesSet,
-		})
+		peers[chainAddress] = &peerData{
+			ChainAddress:     chainAddress,
+			NetworkID:        peersNetworkIDs[chainAddress],
+			NetworkAddresses: networkAddressesSet,
+		}
 	}
 
-	return peersSet
+	return peers
 }
 
 // Convert a peer details to a Prometheus' target.
@@ -273,7 +277,7 @@ discoveryLoop:
 
 		// Combine results received from the source nodes to resolve a set of unique
 		// peers.
-		discoveredPeers := d.combineDiscoveredPeers(sourceDiagnostics)
+		peers := d.combineDiscoveredPeers(sourceDiagnostics)
 
 		level.Info(logger).Log(
 			"msg", fmt.Sprintf("discovered %d connected peers", len(discoveredPeers)),
@@ -288,19 +292,10 @@ discoveryLoop:
 		discoveredPorts := make(map[string]map[string]int)
 
 	peerLoop:
-		for _, discoveredPeer := range discoveredPeers {
+		for _, peer := range peers {
 			level.Info(logger).Log(
 				"msg", "resolving diagnostics endpoint target for peer",
-				"peer", discoveredPeer.ChainAddress,
 			)
-
-			// Register discovered peer's details.
-			if _, ok := d.peers[discoveredPeer.ChainAddress]; !ok {
-				d.peers[discoveredPeer.ChainAddress] = &peerData{}
-			}
-			d.peers[discoveredPeer.ChainAddress].Peer = discoveredPeer
-
-			peer := d.peers[discoveredPeer.ChainAddress]
 
 			// Check if the already known endpoint still works.
 			if peer.ClientInfoEndpoint != "" {
@@ -331,7 +326,7 @@ discoveryLoop:
 
 			// Loop all discovered network addresses of the peer.
 		addressLoop:
-			for _, networkAddress := range discoveredPeer.NetworkMultiAddresses {
+			for _, networkAddress := range peer.NetworkAddresses {
 				// Check if the network address is excluded (e.g. it's an internal address).
 				if slices.Contains(excludedAddresses, networkAddress) {
 					// The address is excluded, continue to the next discovered
@@ -372,7 +367,7 @@ discoveryLoop:
 
 					// Check if this port serves diagnostics for the peer we're
 					// looking for.
-					if discoveredPeer.ChainAddress != diagnostics.ClientInfo.ChainAddress {
+					if peer.ChainAddress != diagnostics.ClientInfo.ChainAddress {
 						return fmt.Errorf(
 							"port serves another peer: %s", diagnostics.ClientInfo.ChainAddress,
 						)
@@ -436,8 +431,8 @@ discoveryLoop:
 
 		newSourceList := make(map[string]bool)
 
-		tgs := make([]*targetgroup.Group, len(d.peers))
-		for _, peer := range d.peers {
+		tgs := make([]*targetgroup.Group, len(peers))
+		for _, peer := range peers {
 			target := peer.createPeerTarget()
 			tgs = append(tgs, &target)
 
