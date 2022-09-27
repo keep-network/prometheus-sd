@@ -289,10 +289,10 @@ discoveryLoop:
 		peers := d.combineDiscoveredPeers(sourceDiagnostics)
 
 		level.Info(logger).Log(
-			"msg", fmt.Sprintf("discovered %d connected peers", len(discoveredPeers)),
+			"msg", fmt.Sprintf("discovered %d connected peers", len(peers)),
 		)
 		level.Debug(logger).Log(
-			"discoveredPeers", fmt.Sprintf("%+v", discoveredPeers),
+			"peers", fmt.Sprintf("%+v", peers),
 		)
 
 		// TODO: Try use https://github.com/Ullaakut/nmap for ports scanning
@@ -302,7 +302,9 @@ discoveryLoop:
 
 	peerLoop:
 		for _, peer := range peers {
-			level.Info(logger).Log(
+			peerLogger := log.With(logger, "peer", peer.ChainAddress)
+
+			level.Info(peerLogger).Log(
 				"msg", "resolving diagnostics endpoint target for peer",
 			)
 
@@ -311,9 +313,8 @@ discoveryLoop:
 				diagnostics, err := getDiagnostics(peer.ClientInfoEndpoint)
 				if err == nil {
 					if peer.ChainAddress == diagnostics.ClientInfo.ChainAddress {
-						level.Info(logger).Log(
+						level.Info(peerLogger).Log(
 							"msg", "already known endpoint still works",
-							"peer", discoveredPeer.ChainAddress,
 							"endpoint", peer.ClientInfoEndpoint,
 						)
 						// The endpoint still works, move to the next peer.
@@ -321,23 +322,21 @@ discoveryLoop:
 					}
 				}
 
-				level.Warn(logger).Log(
+				level.Warn(peerLogger).Log(
 					"msg", "already known endpoint doesn't work",
-					"peer", discoveredPeer.ChainAddress,
 					"endpoint", peer.ClientInfoEndpoint,
 				)
 			}
-
-			level.Info(logger).Log(
-				"msg", "starting diagnostics ports scanning",
-				"peer", discoveredPeer.ChainAddress,
-			)
 
 			// Loop all discovered network addresses of the peer.
 		addressLoop:
 			for _, networkAddress := range peer.NetworkAddresses {
 				// Check if the network address is excluded (e.g. it's an internal address).
 				if slices.Contains(excludedAddresses, networkAddress) {
+					level.Warn(peerLogger).Log(
+						"msg", "address is excluded from scanning",
+						"networkAddress", networkAddress,
+					)
 					// The address is excluded, continue to the next discovered
 					// peer's network address.
 					continue addressLoop
@@ -405,19 +404,19 @@ discoveryLoop:
 				if port, ok := discoveredPorts[networkAddress][peer.ChainAddress]; ok {
 					err := checkPort(port)
 					if err == nil {
-						level.Info(logger).Log(
+						level.Info(peerLogger).Log(
 							"msg", "found diagnostics port",
-							"peer", peer.ChainAddress,
 							"address", networkAddress,
 							"port", port,
 						)
 						// We've got correct address and port for the peer; move to another peer.
 						continue peerLoop
 					}
-					level.Warn(logger).Log(
+					level.Warn(peerLogger).Log(
 						"msg", "failed to check port",
 						"address", networkAddress,
-						"port", port, "err", err,
+						"port", port,
+						"err", err,
 					)
 					// The port is not correct; proceed to the ports scanning loop.
 				}
@@ -425,21 +424,23 @@ discoveryLoop:
 				// Scan ports range.
 			portLoop:
 				for port := config.diagnosticsPortRange.Start; port <= config.diagnosticsPortRange.End; port++ {
-					level.Debug(logger).Log("msg", "scanning port", "peer", discoveredPeer.ChainAddress, "address", networkAddress, "port", port)
+					level.Debug(peerLogger).Log("msg", "scanning port", "address", networkAddress, "port", port)
 
 					err := checkPort(port)
 					if err != nil {
-						level.Warn(logger).Log("msg", "failed to check port", "address", networkAddress, "port", port, "err", err)
+						level.Warn(peerLogger).Log("msg", "failed to check port", "address", networkAddress, "port", port, "err", err)
 						continue portLoop
 					}
-					level.Info(logger).Log("msg", "found diagnostics port", "peer", discoveredPeer.ChainAddress, "address", networkAddress, "port", port)
+					level.Info(peerLogger).Log("msg", "found diagnostics port", "address", networkAddress, "port", port)
 
 					// We've got correct address and port for the peer, let's resolve another peer.
 					continue peerLoop
 				}
 			}
 
-			level.Error(logger).Log("msg", "failed to find diagnostics port", "peer", discoveredPeer.ChainAddress, "multiaddresses", discoveredPeer.NetworkMultiAddresses)
+			level.Error(peerLogger).Log(
+				"msg", "failed to find diagnostics port",
+				"networkAddresses", fmt.Sprintf("%s", peer.NetworkAddresses))
 		}
 
 		// Note that we treat errors when querying specific node as fatal for this
@@ -449,6 +450,10 @@ discoveryLoop:
 		// the outer loop.
 
 		newSourceList := make(map[string]bool)
+
+		level.Info(logger).Log(
+			"msg", fmt.Sprintf("discovery round completed with %d peers", len(peers)),
+		)
 
 		tgs := make([]*targetgroup.Group, len(peers))
 		for _, peer := range peers {
@@ -468,8 +473,6 @@ discoveryLoop:
 			}
 		}
 		d.oldSourceList = newSourceList
-
-		level.Info(logger).Log("msg", "discovery round completed")
 
 		// We're returning all peer nodes targets as a single target group.
 		ch <- tgs
