@@ -101,7 +101,7 @@ func init() {
 	app.Flag(
 		"scan.range",
 		"A port range for diagnostics endpoint port scan.",
-	).Default("9701-9799").StringVar(&scanPortRangeFlagValue)
+	).Default("9601-9621").StringVar(&scanPortRangeFlagValue)
 
 	app.Flag(
 		"scan.timeout",
