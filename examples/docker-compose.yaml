@@ -34,3 +34,4 @@ services:
       - bootstrap-0.test.keep.network:9601
       - --source.address
       - bootstrap-1.test.keep.network:9601
+      - --scan.allowPrivateAddresses

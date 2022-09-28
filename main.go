@@ -51,8 +51,6 @@ var (
 
 	scanPortRangeFlagValue string
 
-	excludedAddresses = []string{"127.0.0.1"}
-
 	labelChainAddress = model.MetaLabelPrefix + "chain_address"
 	labelNetworkID    = model.MetaLabelPrefix + "network_id"
 )
@@ -63,8 +61,10 @@ type sdConfig struct {
 
 	refreshInterval time.Duration
 
-	diagnosticsPortRange utils.Range
-	scanPortTimeout      time.Duration
+	diagnosticsPortRange  utils.Range
+	scanPortTimeout       time.Duration
+	bannedPeerAddresses   []string
+	allowPrivateAddresses bool
 
 	getDiagnosticsTimeout time.Duration
 
@@ -112,6 +112,16 @@ func init() {
 		"scan.timeout",
 		"Timeout for single port scan.",
 	).Default("1s").DurationVar(&config.scanPortTimeout)
+
+	app.Flag(
+		"scan.bannedAddress",
+		"Addresses excluded from the discovery.",
+	).Default("").StringsVar(&config.bannedPeerAddresses)
+
+	app.Flag(
+		"scan.allowPrivateAddresses",
+		"Allow private peers addresses for discovery (useful for internal network testing).",
+	).Default("false").BoolVar(&config.allowPrivateAddresses)
 
 	app.Flag(
 		"diagnostics.timeout",
@@ -274,6 +284,24 @@ func getDiagnostics(addressWithPort string) (clientinfo.Diagnostics, error) {
 	return diagnostics, nil
 }
 
+func isAddressExcluded(address string) bool {
+	if slices.Contains(config.bannedPeerAddresses, address) {
+		return true
+	}
+
+	if ip := net.ParseIP(address); ip != nil {
+		if ip.IsLoopback() {
+			return true
+		}
+
+		if ip.IsPrivate() && !config.allowPrivateAddresses {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Run is an implementation of the Discovery interface.
 func (d *discovery) Run(ctx context.Context, ch chan<- []*targetgroup.Group) {
 discoveryLoop:
@@ -329,8 +357,8 @@ discoveryLoop:
 			// Loop all discovered network addresses of the peer.
 		addressLoop:
 			for _, networkAddress := range peer.NetworkAddresses {
-				// Check if the network address is excluded (e.g. it's an internal address).
-				if slices.Contains(excludedAddresses, networkAddress) {
+				// Check if the network address is excluded (banned, loopback or internal)
+				if isAddressExcluded(networkAddress) {
 					level.Warn(peerLogger).Log(
 						"msg", "address is excluded from scanning",
 						"networkAddress", networkAddress,
