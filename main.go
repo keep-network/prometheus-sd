@@ -223,13 +223,11 @@ func (d *discovery) combineDiscoveredPeers(
 		for k := range networkAddresses {
 			networkAddressesSet = append(networkAddressesSet, k)
 		}
-		// TODO: Sort addresses to start endpoint resolving with `dns` addresses
-		// and move addresses looking like internal to the end of the list.
 
 		peers[chainAddress] = &peerData{
 			ChainAddress:     chainAddress,
 			NetworkID:        peersNetworkIDs[chainAddress],
-			NetworkAddresses: networkAddressesSet,
+			NetworkAddresses: utils.SortAddresses(networkAddressesSet),
 			NetworkPort:      peersNetworkPorts[chainAddress],
 		}
 	}
