@@ -1,0 +1,37 @@
+version: '2'
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./data/prometheus:/etc/prometheus/data/
+    ports:
+      - 9090:9090
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    volumes:
+      - ./config/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./config/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./data/grafana:/var/lib/grafana
+
+    ports:
+      - 3000:3000
+  keep-prometheus-sd:
+    # To use the published image uncomment the line below.
+    # image: keepnetwork/keep-prometheus-sd
+    build: ..
+    container_name: keep-prometheus-sd
+    volumes:
+      - ./data/prometheus/:/data/
+    working_dir: /app
+    command:
+      - --output.file
+      - /data/keep-sd.json
+      - --source.address
+      - bootstrap-0.test.keep.network:9601
+      - --source.address
+      - bootstrap-1.test.keep.network:9601
+      - --scan.allowPrivateAddresses
